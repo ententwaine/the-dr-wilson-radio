@@ -26,29 +26,73 @@ export default function AdminDashboard() {
     if(res.ok) setSettings(await res.json());
   }
 
+  const getAudioDuration = (file) => {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        URL.revokeObjectURL(url);
+        resolve(audio.duration);
+      });
+      audio.addEventListener('error', () => {
+        URL.revokeObjectURL(url);
+        resolve(0);
+      });
+    });
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return alert("Please select a file");
     setUploading(true);
     
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('type', type);
-    if (type === 'ADVERTISEMENT') {
-      formData.append('importance', importance);
-    }
+    try {
+      // 1. Get Duration
+      const duration = await getAudioDuration(file);
 
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (res.ok) {
-      setFile(null);
-      e.target.reset();
-      fetchTracks();
-    } else {
-      alert("Upload failed");
+      // 2. Get Signed URL
+      const urlRes = await fetch('/api/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'audio/mpeg' })
+      });
+      
+      if (!urlRes.ok) throw new Error("Could not get upload URL");
+      const { signedUrl, publicUrl, safeFilename } = await urlRes.json();
+
+      // 3. Upload directly to Firebase Storage
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'audio/mpeg' },
+        body: file
+      });
+      
+      if (!uploadRes.ok) throw new Error("Direct upload failed. Are CORS rules set?");
+
+      // 4. Save metadata to Firestore
+      const dbRes = await fetch('/api/tracks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: file.name,
+          filename: safeFilename,
+          url: publicUrl,
+          type: type,
+          importance: type === 'ADVERTISEMENT' ? importance : null,
+          duration: duration
+        })
+      });
+
+      if (dbRes.ok) {
+        setFile(null);
+        e.target.reset();
+        fetchTracks();
+      } else {
+        throw new Error("Failed to save track data");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Upload failed: " + err.message);
     }
     setUploading(false);
   }
