@@ -3,7 +3,11 @@ import admin from 'firebase-admin';
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+    let rawStr = process.env.FIREBASE_SERVICE_ACCOUNT || '{}';
+    if (typeof rawStr === 'string' && rawStr.startsWith("'") && rawStr.endsWith("'")) {
+      rawStr = rawStr.slice(1, -1);
+    }
+    const serviceAccount = JSON.parse(rawStr);
     
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
