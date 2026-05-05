@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Track {
+  id         String   @id @default(uuid())
+  title      String
+  filename   String
+  type       String   // "SONG", "ADVERTISEMENT", "PLAY_ONCE"
+  status     String   @default("PENDING") // "PENDING", "PLAYED"
+  importance Int?     // 1, 2, 3 (only for ADVERTISEMENT)
+  duration   Float    // Audio duration in seconds
+  uploadedAt DateTime @default(now())
+}
+
+model Broadcast {
+  id             Int      @id @default(1)
+  currentTrackId String?
+  startedAt      DateTime @default(now())
+  songsSinceAd   Int      @default(0)
+}
+
+model Settings {
+  id          Int @id @default(1)
+  adFrequency Int @default(3)
+}
